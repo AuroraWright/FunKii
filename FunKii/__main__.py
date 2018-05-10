@@ -41,6 +41,8 @@ parser.add_argument('-title', nargs='+', dest='titles', default=[],
                     help='Give TitleIDs to be specifically downloaded')
 parser.add_argument('-key', nargs='+', dest='keys', default=[],
                     help='Encrypted Title Key for the Title IDs. Must be in the same order as TitleIDs if multiple')
+parser.add_argument('-getcetk', action='store_true', default=False, dest='getcetk',
+                    help='Get legit cetk from the CDN, this is only available for system titles and some other free titles.')
 
 
 def bytes2human(n, f='%(value).2f %(symbol)s', symbols='customary'):
@@ -140,7 +142,7 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
 
     typecheck = title_id[0:8]
 
-    isupdate = typecheck == '00000001' or typecheck == '00010002' or typecheck == '00010008'
+    isupdate = title_key == 1 or typecheck == '00000001' or typecheck == '00010002' or typecheck == '00010008'
 
     rawdir = os.path.join('raw', title_id)
 
@@ -178,7 +180,7 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
 
     # get ticket from keysite, from cdn if game update, or generate ticket
     if isupdate:
-        print('\nThis is a system title, so we are getting the legit ticket straight from Nintendo.')
+        print('\nWe are getting the legit ticket straight from Nintendo.')
         tik_path = os.path.join(rawdir, 'title.tik')
         if not download_file(baseurl + '/cetk', tik_path, retry_count):
             print('ERROR: Could not download ticket from {}'.format(baseurl + '/cetk'))
@@ -251,15 +253,16 @@ def main(args=None):
     keys=arguments.keys
     output_dir=arguments.output_dir
     build=arguments.build
+    getcetk=arguments.getcetk
     retry_count=arguments.retry_count
 
     print('*******\nFunKii {} by cearp, the cerea1killer and AuroraWright\n*******\n'.format(__VERSION__))
     titlekeys_data = []
 
-    if keys and (len(keys)!=len(titles)):
+    if (not getcetk) and keys and (len(keys)!=len(titles)):
         print('Number of keys and Title IDs do not match up')
         sys.exit(0)
-    if titles and (not keys):
+    if titles and (not keys) and (not getcetk):
         print('You also need to provide \'-keys\'')
         sys.exit(0)
 
@@ -269,9 +272,9 @@ def main(args=None):
             print('The Title ID(s) must be 16 hexadecimal characters long')
             print('{} - is not ok.'.format(title_id))
             sys.exit(0)
-        title_key = None
+        title_key = 1 if getcetk else None
 
-        if keys:
+        if (not getcetk) and keys:
             title_key = keys.pop()
             if not check_title_key(title_key):
                 print('The key(s) must be 32 hexadecimal characters long')
