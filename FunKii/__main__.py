@@ -8,6 +8,7 @@ __VERSION__ = 1.0
 
 import argparse
 import binascii
+import string
 import os
 import re
 import sys
@@ -41,6 +42,8 @@ parser.add_argument('-title', nargs='+', dest='titles', default=[],
                     help='Give TitleIDs to be specifically downloaded')
 parser.add_argument('-key', nargs='+', dest='keys', default=[],
                     help='Encrypted Title Key for the Title IDs. Must be in the same order as TitleIDs if multiple')
+parser.add_argument('-version', nargs='+', dest='versions', default=[],
+                    help='Version of the title to download. Must be in the same order as TitleIDs if multiple')
 parser.add_argument('-getcetk', action='store_true', default=False, dest='getcetk',
                     help='Get legit cetk from the CDN, this is only available for system titles and some other free titles.')
 
@@ -138,13 +141,16 @@ def make_ticket(title_id, title_key, title_version, fulloutputpath):
     	tikdata[0x1EC:0x01F0] = binascii.a2b_hex('FFFFFFFF')
     open(fulloutputpath, 'wb').write(tikdata)
 
-def process_title_id(title_id, title_key, output_dir=None, build=False, retry_count=3, tickets_only=False):
+def process_title_id(title_id, title_key, version, output_dir=None, build=False, retry_count=3, tickets_only=False):
 
     typecheck = title_id[0:8]
 
-    isupdate = title_key == 1 or typecheck == '00000001' or typecheck == '00010002' or typecheck == '00010008'
+    islegit = title_key == 1 or typecheck == '00000001' or typecheck == '00010002' or typecheck == '00010008'
 
-    rawdir = os.path.join('raw', title_id)
+    if(not version):
+        rawdir = os.path.join('raw', title_id)
+    else:
+        rawdir = os.path.join('raw', title_id + 'v' + version)
 
     log('Starting work in: "{}"'.format(rawdir))
 
@@ -159,7 +165,11 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
 
     baseurl = 'http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/{}'.format(title_id)
     tmd_path = os.path.join(rawdir, 'title.tmd')
-    if not download_file(baseurl + '/tmd', tmd_path, retry_count):
+    if(not version):
+        tmdurl = baseurl + '/tmd'
+    else:
+        tmdurl = baseurl + '/tmd' + '.' + version
+    if not download_file(tmdurl, tmd_path, retry_count):
         print('ERROR: Could not download TMD...')
         print('MAYBE YOU ARE BLOCKING CONNECTIONS TO NINTENDO? IF YOU ARE, DON\'T...! :)')
         print('Skipping title...')
@@ -169,7 +179,7 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
         tmd = f.read()
         content_count = int(binascii.hexlify(tmd[0x1DE:0x1E0]), 16)
         tmdsize = 0x1E4 + (36 * content_count)
-        if isupdate:
+        if islegit:
             f.seek(tmdsize + 0x300)
             cetk = f.read(0x400)
             f.seek(tmdsize)
@@ -179,7 +189,7 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
     title_version = tmd[0x1DC:0x1DE]
 
     # get ticket from keysite, from cdn if game update, or generate ticket
-    if isupdate:
+    if islegit:
         print('\nWe are getting the legit ticket straight from Nintendo.')
         tik_path = os.path.join(rawdir, 'title.tik')
         if not download_file(baseurl + '/cetk', tik_path, retry_count):
@@ -221,7 +231,10 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
     log('\nTitle download complete in "{}"\n'.format(rawdir))
 
     if build:
-        waddir = os.path.join('wad', title_id)
+        if(not version):
+            waddir = os.path.join('wad', title_id)
+        else:
+            waddir = os.path.join('wad', title_id + 'v' + version)
 
         if output_dir is not None:
             waddir = os.path.join(output_dir, waddir)
@@ -229,10 +242,13 @@ def process_title_id(title_id, title_key, output_dir=None, build=False, retry_co
         if not os.path.exists(waddir):
             os.makedirs(os.path.join(waddir))
 
-        path = os.path.join(waddir, title_id) + '.wad'
+        if(not version):
+            path = os.path.join(waddir, title_id + '.wad')
+        else:
+            path = os.path.join(waddir, title_id + 'v' + version + '.wad')
 
         makecommand = ' ' + os.path.join(rawdir) + ' ' + path + ' -e'
-        if not isupdate:
+        if not islegit:
             makecommand = makecommand + ' -T'
         os.system(execname + makecommand)
         if(os.path.isfile(path)):
@@ -251,6 +267,7 @@ def main(args=None):
     arguments = parser.parse_args()
     titles=arguments.titles
     keys=arguments.keys
+    versions=arguments.versions
     output_dir=arguments.output_dir
     build=arguments.build
     getcetk=arguments.getcetk
@@ -262,8 +279,13 @@ def main(args=None):
     if (not getcetk) and keys and (len(keys)!=len(titles)):
         print('Number of keys and Title IDs do not match up')
         sys.exit(0)
+
     if titles and (not keys) and (not getcetk):
         print('You also need to provide \'-keys\'')
+        sys.exit(0)
+
+    if versions and (len(versions)!=len(titles)):
+        print('Number of versions and Title IDs do not match up')
         sys.exit(0)
 
     for title_id in titles:
@@ -273,6 +295,7 @@ def main(args=None):
             print('{} - is not ok.'.format(title_id))
             sys.exit(0)
         title_key = 1 if getcetk else None
+        version = None
 
         if (not getcetk) and keys:
             title_key = keys.pop()
@@ -285,7 +308,14 @@ def main(args=None):
             print('ERROR: Could not find title or ticket for {}'.format(title_id))
             continue
 
-        process_title_id(title_id, title_key, output_dir, build, retry_count)
+        if versions:
+            version = versions.pop()
+            if (len(version) > 5) or any(c not in string.digits for c in version):
+                print('The version(s) must be 5 decimal digits at most')
+                print(version + ' - is not ok.')
+                sys.exit(0)
+
+        process_title_id(title_id, title_key, version, output_dir, build, retry_count)
 
 def log(output):
     output = output.encode(sys.stdout.encoding, errors='replace')
