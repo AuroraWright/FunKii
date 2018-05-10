@@ -147,7 +147,7 @@ def process_title_id(title_id, title_key, version, output_dir=None, build=False,
 
     islegit = title_key == 1 or typecheck == '00000001' or typecheck == '00010002' or typecheck == '00010008'
 
-    if(not version):
+    if not version:
         rawdir = os.path.join('raw', title_id)
     else:
         rawdir = os.path.join('raw', title_id + 'v' + version)
@@ -165,11 +165,11 @@ def process_title_id(title_id, title_key, version, output_dir=None, build=False,
 
     baseurl = 'http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/{}'.format(title_id)
     tmd_path = os.path.join(rawdir, 'title.tmd')
-    if(not version):
-        tmdurl = baseurl + '/tmd'
+    if not version:
+        tmd_url = baseurl + '/tmd'
     else:
-        tmdurl = baseurl + '/tmd' + '.' + version
-    if not download_file(tmdurl, tmd_path, retry_count):
+        tmd_url = baseurl + '/tmd' + '.' + version
+    if not download_file(tmd_url, tmd_path, retry_count):
         print('ERROR: Could not download TMD...')
         print('MAYBE YOU ARE BLOCKING CONNECTIONS TO NINTENDO? IF YOU ARE, DON\'T...! :)')
         print('Skipping title...')
@@ -231,7 +231,7 @@ def process_title_id(title_id, title_key, version, output_dir=None, build=False,
     log('\nTitle download complete in "{}"\n'.format(rawdir))
 
     if build:
-        if(not version):
+        if not version:
             waddir = os.path.join('wad', title_id)
         else:
             waddir = os.path.join('wad', title_id + 'v' + version)
@@ -242,7 +242,7 @@ def process_title_id(title_id, title_key, version, output_dir=None, build=False,
         if not os.path.exists(waddir):
             os.makedirs(os.path.join(waddir))
 
-        if(not version):
+        if not version:
             path = os.path.join(waddir, title_id + '.wad')
         else:
             path = os.path.join(waddir, title_id + 'v' + version + '.wad')
